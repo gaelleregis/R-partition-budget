@@ -1,0 +1,237 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Gestionnaire de Budget - Enveloppes & Revenus</title>
+    <!-- Tailwind CSS CDN -->
+    <script src="https://cdn.tailwindcss.com"></script>
+    <!-- Chart.js CDN -->
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+    <!-- FontAwesome pour les icônes -->
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+    <style>
+        @import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap');
+        body { font-family: 'Inter', sans-serif; }
+    </style>
+</head>
+<body class="bg-slate-100 text-slate-800 min-h-screen pb-12">
+
+    <!-- En-tête -->
+    <header class="bg-indigo-700 text-white shadow-lg">
+        <div class="max-w-6xl mx-auto px-4 py-6 flex justify-between items-center flex-wrap gap-4">
+            <div>
+                <h1 class="text-2xl font-bold flex items-center gap-2">
+                    <i class="fa-solid fa-wallet"></i> Mon Budget & Enveloppes
+                </h1>
+                <p class="text-indigo-200 text-sm">Suivi mensuel du budget complet (Revenus 2 800,00 € & Enveloppes pré-remplies)</p>
+            </div>
+            <div class="flex gap-2">
+                <button onclick="exportData()" class="bg-indigo-600 hover:bg-indigo-800 text-white px-3 py-2 rounded-lg text-sm transition flex items-center gap-2 border border-indigo-500 shadow-sm">
+                    <i class="fa-solid fa-download"></i> Exporter
+                </button>
+                <label class="bg-indigo-600 hover:bg-indigo-800 text-white px-3 py-2 rounded-lg text-sm transition flex items-center gap-2 border border-indigo-500 shadow-sm cursor-pointer">
+                    <i class="fa-solid fa-upload"></i> Importer
+                    <input type="file" id="import-file" class="hidden" accept=".json" onchange="importData(event)">
+                </label>
+                <button onclick="resetToDefaults()" class="bg-red-600 hover:bg-red-700 text-white px-3 py-2 rounded-lg text-sm transition flex items-center gap-2 shadow-sm">
+                    <i class="fa-solid fa-rotate-left"></i> Réinitialiser
+                </button>
+            </div>
+        </div>
+    </header>
+
+    <main class="max-w-6xl mx-auto px-4 mt-8 grid grid-cols-1 lg:grid-cols-3 gap-8">
+
+        <!-- Colonne Gauche : Synthèse, Formulaires -->
+        <div class="space-y-6">
+            
+            <!-- Carte Vue d'ensemble -->
+            <div class="bg-white p-6 rounded-2xl shadow-sm border border-slate-200">
+                <h2 class="text-lg font-semibold text-slate-700 mb-4 flex items-center gap-2">
+                    <i class="fa-solid fa-chart-pie text-indigo-600"></i> Synthèse Financière
+                </h2>
+                <div class="grid grid-cols-2 gap-3 text-center mb-4">
+                    <div class="bg-emerald-50 p-3 rounded-xl border border-emerald-100">
+                        <p class="text-xs text-emerald-700 font-medium">Total Revenus</p>
+                        <p id="total-income" class="text-lg font-bold text-emerald-900">0,00 €</p>
+                    </div>
+                    <div class="bg-indigo-50 p-3 rounded-xl border border-indigo-100">
+                        <p class="text-xs text-indigo-700 font-medium">Budget Enveloppes</p>
+                        <p id="total-allocated" class="text-lg font-bold text-indigo-900">0,00 €</p>
+                    </div>
+                </div>
+                <div class="grid grid-cols-2 gap-3 text-center">
+                    <div class="bg-rose-50 p-3 rounded-xl border border-rose-100">
+                        <p class="text-xs text-rose-700 font-medium">Total Dépensé</p>
+                        <p id="total-spent" class="text-lg font-bold text-rose-900">0,00 €</p>
+                    </div>
+                    <div class="bg-sky-50 p-3 rounded-xl border border-sky-100">
+                        <p class="text-xs text-sky-700 font-medium">Reste Enveloppes</p>
+                        <p id="total-remaining" class="text-lg font-bold text-sky-900">0,00 €</p>
+                    </div>
+                </div>
+                <div class="mt-6">
+                    <canvas id="budgetChart" height="180"></canvas>
+                </div>
+            </div>
+
+            <!-- Formulaire Entrer une Transaction (Dépense / Revenu) -->
+            <div class="bg-white p-6 rounded-2xl shadow-sm border border-slate-200">
+                <div class="flex justify-between items-center mb-4">
+                    <h2 class="text-lg font-semibold text-slate-700 flex items-center gap-2">
+                        <i class="fa-solid fa-plus-circle text-indigo-600"></i> Saisir une opération
+                    </h2>
+                </div>
+                
+                <!-- Toggle Type (Dépense / Revenu) -->
+                <div class="grid grid-cols-2 gap-2 p-1 bg-slate-100 rounded-xl mb-4">
+                    <button type="button" id="btn-type-expense" onclick="setTransactionType('expense')" class="py-2 text-sm font-semibold rounded-lg bg-white shadow-sm text-indigo-600 transition">Dépense</button>
+                    <button type="button" id="btn-type-income" onclick="setTransactionType('income')" class="py-2 text-sm font-semibold rounded-lg text-slate-500 hover:text-slate-800 transition">Revenu</button>
+                </div>
+
+                <form id="transaction-form" onsubmit="addTransaction(event)" class="space-y-4">
+                    <div id="category-group">
+                        <label class="block text-xs font-semibold text-slate-600 uppercase mb-1">Enveloppe Budgétaire</label>
+                        <select id="transaction-category" class="w-full bg-slate-50 border border-slate-300 rounded-lg p-2.5 text-sm focus:ring-2 focus:ring-indigo-500 outline-none">
+                            <!-- Popuplé en JS -->
+                        </select>
+                    </div>
+                    <div>
+                        <label class="block text-xs font-semibold text-slate-600 uppercase mb-1">Montant (€)</label>
+                        <input type="number" id="transaction-amount" step="0.01" min="0.01" placeholder="Ex: 45.00" required class="w-full bg-slate-50 border border-slate-300 rounded-lg p-2.5 text-sm focus:ring-2 focus:ring-indigo-500 outline-none">
+                    </div>
+                    <div>
+                        <label class="block text-xs font-semibold text-slate-600 uppercase mb-1">Description</label>
+                        <input type="text" id="transaction-desc" placeholder="Ex: Salaire, Dépense courses..." required class="w-full bg-slate-50 border border-slate-300 rounded-lg p-2.5 text-sm focus:ring-2 focus:ring-indigo-500 outline-none">
+                    </div>
+                    <button type="submit" id="btn-submit-tx" class="w-full bg-indigo-600 hover:bg-indigo-700 text-white font-medium py-2.5 rounded-lg shadow-md transition">
+                        Ajouter la dépense
+                    </button>
+                </form>
+            </div>
+        </div>
+
+        <!-- Colonne Droite : Enveloppes & Historique -->
+        <div class="lg:col-span-2 space-y-8">
+            
+            <!-- Section Enveloppes Budgétaires -->
+            <div>
+                <h2 class="text-xl font-bold text-slate-800 mb-4 flex items-center justify-between">
+                    <span><i class="fa-solid fa-envelope-open-text text-indigo-600 mr-2"></i> Vos Enveloppes Budgétaires</span>
+                </h2>
+                <div id="envelopes-grid" class="grid grid-cols-1 md:grid-cols-2 gap-4">
+                    <!-- Généré par JS -->
+                </div>
+            </div>
+
+            <!-- Historique Complet des Transactions (Revenus & Dépenses) -->
+            <div class="bg-white p-6 rounded-2xl shadow-sm border border-slate-200">
+                <h2 class="text-lg font-semibold text-slate-700 mb-4 flex items-center gap-2">
+                    <i class="fa-solid fa-list-check text-slate-500"></i> Historique des opérations
+                </h2>
+                <div class="overflow-x-auto">
+                    <table class="w-full text-left text-sm">
+                        <thead class="bg-slate-50 text-slate-500 text-xs uppercase border-b border-slate-200">
+                            <tr>
+                                <th class="p-3">Date</th>
+                                <th class="p-3">Type / Catégorie</th>
+                                <th class="p-3">Description</th>
+                                <th class="p-3 text-right">Montant</th>
+                                <th class="p-3 text-center">Action</th>
+                            </tr>
+                        </thead>
+                        <tbody id="history-list" class="divide-y divide-slate-100">
+                            <!-- Généré par JS -->
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+
+        </div>
+
+    </main>
+
+    <script>
+        // Enveloppes par défaut (Total de 675.13 € pré-alloués)
+        const defaultEnvelopes = [
+            { id: 1, name: 'Courses', allocated: 300.00, spent: 0, icon: 'fa-cart-shopping' },
+            { id: 2, name: 'Enfants', allocated: 70.00, spent: 0, icon: 'fa-child' },
+            { id: 3, name: 'Animaux', allocated: 50.00, spent: 0, icon: 'fa-paw' },
+            { id: 4, name: 'Cadeaux Noël', allocated: 50.13, spent: 0, icon: 'fa-gift' },
+            { id: 5, name: 'Auto-cross', allocated: 45.00, spent: 0, icon: 'fa-car-burst' },
+            { id: 6, name: 'Vacances', allocated: 45.00, spent: 0, icon: 'fa-plane' },
+            { id: 7, name: 'Maison', allocated: 30.00, spent: 0, icon: 'fa-house' },
+            { id: 8, name: 'Imprévus', allocated: 30.00, spent: 0, icon: 'fa-shield-halved' },
+            { id: 9, name: 'Loisirs', allocated: 30.00, spent: 0, icon: 'fa-gamepad' },
+            { id: 10, name: 'Anniversaires', allocated: 25.00, spent: 0, icon: 'fa-cake-candles' }
+        ];
+
+        // Transactions pré-chargées avec le Revenu Mensuel de 2 800,00 €
+        const defaultTransactions = [
+            {
+                id: 1001,
+                type: 'income',
+                envelopeName: 'Revenu',
+                amount: 2800.00,
+                desc: 'Revenu Mensuel du Foyer',
+                date: new Date().toLocaleDateString('fr-FR', { day: '2-digit', month: '2-digit', year: '2-digit' })
+            }
+        ];
+
+        let currentType = 'expense';
+        let envelopes = JSON.parse(localStorage.getItem('budget_envelopes')) || defaultEnvelopes;
+        let transactions = JSON.parse(localStorage.getItem('budget_transactions')) || defaultTransactions;
+        let chartInstance = null;
+
+        function saveData() {
+            localStorage.setItem('budget_envelopes', JSON.stringify(envelopes));
+            localStorage.setItem('budget_transactions', JSON.stringify(transactions));
+            render();
+        }
+
+        function setTransactionType(type) {
+            currentType = type;
+            const btnExpense = document.getElementById('btn-type-expense');
+            const btnIncome = document.getElementById('btn-type-income');
+            const categoryGroup = document.getElementById('category-group');
+            const btnSubmit = document.getElementById('btn-submit-tx');
+
+            if (type === 'expense') {
+                btnExpense.className = "py-2 text-sm font-semibold rounded-lg bg-white shadow-sm text-indigo-600 transition";
+                btnIncome.className = "py-2 text-sm font-semibold rounded-lg text-slate-500 hover:text-slate-800 transition";
+                categoryGroup.classList.remove('hidden');
+                btnSubmit.innerText = "Ajouter la dépense";
+                btnSubmit.className = "w-full bg-indigo-600 hover:bg-indigo-700 text-white font-medium py-2.5 rounded-lg shadow-md transition";
+            } else {
+                btnIncome.className = "py-2 text-sm font-semibold rounded-lg bg-white shadow-sm text-emerald-600 transition";
+                btnExpense.className = "py-2 text-sm font-semibold rounded-lg text-slate-500 hover:text-slate-800 transition";
+                categoryGroup.classList.add('hidden');
+                btnSubmit.innerText = "Ajouter le revenu";
+                btnSubmit.className = "w-full bg-emerald-600 hover:bg-emerald-700 text-white font-medium py-2.5 rounded-lg shadow-md transition";
+            }
+        }
+
+        function addTransaction(e) {
+            e.preventDefault();
+            const amount = parseFloat(document.getElementById('transaction-amount').value);
+            const desc = document.getElementById('transaction-desc').value.trim();
+
+            if (currentType === 'expense') {
+                const categoryId = parseInt(document.getElementById('transaction-category').value);
+                const envelope = envelopes.find(env => env.id === categoryId);
+                if (envelope) {
+                    envelope.spent += amount;
+                    transactions.unshift({
+                        id: Date.now(),
+                        type: 'expense',
+                        envelopeId: categoryId,
+                        envelopeName: envelope.name,
+                        amount: amount,
+                        desc: desc,
+                        date: new Date().toLocaleDateString('fr-FR', { day: '2-digit', month: '2-digit', year: '2-digit' })
+                    });
+                }
+            } else {
+                transactions.unshift({
+                    id: Date.now(),
